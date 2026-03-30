@@ -1,3 +1,12 @@
+import { RecaptchaVerifier, ConfirmationResult } from "firebase/auth";
+
+declare global {
+  interface Window {
+    recaptchaVerifier: RecaptchaVerifier;
+    confirmationResult: ConfirmationResult;
+  }
+}
+
 export interface ArchitectureSection {
   id: string;
   title: string;

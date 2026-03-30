@@ -440,16 +440,49 @@ const LumozaScreen = ({ user, onRefreshUser }: ScreenProps) => {
 
 const LoginScreen = ({ onLogin }: { onLogin: (user: UserData) => void }) => {
   const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [showOtp, setShowOtp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = async () => {
+  useEffect(() => {
+    try {
+      authService.setupRecaptcha("recaptcha-container");
+    } catch (err) {
+      console.error("Failed to setup reCAPTCHA", err);
+      setError("Failed to initialize security check. Please refresh.");
+    }
+  }, []);
+
+  const handleSendOtp = async () => {
     if (!phone) return;
     setLoading(true);
+    setError(null);
     try {
-      const res = await authService.register(phone);
+      console.log("Attempting to send OTP to:", phone);
+      await authService.sendOTP(phone);
+      setShowOtp(true);
+      console.log("OTP sent successfully");
+    } catch (err: any) {
+      console.error("Failed to send OTP", err);
+      setError(err.message || "Failed to send SMS. Please check your number.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otp) return;
+    setLoading(true);
+    setError(null);
+    try {
+      console.log("Attempting to verify OTP:", otp);
+      const res = await authService.verifyOTP(otp);
+      console.log("OTP verified, user data:", res.user);
       onLogin(res.user);
-    } catch (error) {
-      console.error("Login failed", error);
+    } catch (err: any) {
+      console.error("Failed to verify OTP", err);
+      setError(err.message || "Invalid code. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -457,28 +490,70 @@ const LoginScreen = ({ onLogin }: { onLogin: (user: UserData) => void }) => {
 
   return (
     <div className="h-full flex flex-col p-8 bg-[#050505] items-center justify-center space-y-8">
+      <div id="recaptcha-container"></div>
+      
       <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-2xl shadow-white/10">
         <LogoIcon className="scale-150" />
       </div>
+      
       <div className="text-center space-y-2">
-        <h1 className="text-3xl font-medium text-white tracking-tighter">Welcome to Kulima</h1>
-        <p className="text-zinc-500 text-sm">Enter your phone number to continue</p>
+        <h1 className="text-3xl font-medium text-white tracking-tighter">
+          {showOtp ? 'Verify Code' : 'Welcome to Kulima'}
+        </h1>
+        <p className="text-zinc-500 text-sm">
+          {showOtp ? `Enter the code sent to ${phone}` : 'Enter your phone number to continue'}
+        </p>
       </div>
+
       <div className="w-full space-y-4">
-        <input 
-          type="tel" 
-          placeholder="+265 000 000 000" 
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-white text-lg text-center outline-none focus:border-blue-500 transition-colors"
-        />
-        <button 
-          onClick={handleLogin}
-          disabled={loading || !phone}
-          className="w-full py-5 bg-white text-black rounded-3xl font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50"
-        >
-          {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Continue'}
-        </button>
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-xs text-center">
+            {error}
+          </div>
+        )}
+
+        {!showOtp ? (
+          <>
+            <input 
+              type="tel" 
+              placeholder="+265 000 000 000" 
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-white text-lg text-center outline-none focus:border-blue-500 transition-colors"
+            />
+            <button 
+              onClick={handleSendOtp}
+              disabled={loading || !phone}
+              className="w-full py-5 bg-white text-black rounded-3xl font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Continue'}
+            </button>
+          </>
+        ) : (
+          <>
+            <input 
+              type="text" 
+              placeholder="000000" 
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              maxLength={6}
+              className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-white text-3xl tracking-[1em] text-center outline-none focus:border-blue-500 transition-colors"
+            />
+            <button 
+              onClick={handleVerifyOtp}
+              disabled={loading || otp.length < 6}
+              className="w-full py-5 bg-white text-black rounded-3xl font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Verify & Login'}
+            </button>
+            <button 
+              onClick={() => setShowOtp(false)}
+              className="w-full text-zinc-500 text-sm font-medium hover:text-white transition-colors"
+            >
+              Change phone number
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

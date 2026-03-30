@@ -5,19 +5,23 @@ import { config } from "../config/env";
 const router = Router();
 
 router.post("/register", (req, res) => {
-  const { phone } = req.body;
+  const { phone, firebaseUid } = req.body;
+
+  console.log("Registering user:", { phone, firebaseUid });
 
   if (!phone) {
+    console.error("Registration failed: Phone number is missing");
     return res.status(400).json({ error: "Phone number is required" });
   }
 
   const existingUser = findUserByPhone(phone);
   if (existingUser) {
+    console.log("User already exists:", existingUser.id);
     return res.status(200).json({ message: "User already exists", user: existingUser });
   }
 
   const newUser: User = {
-    id: Math.random().toString(36).substr(2, 9),
+    id: firebaseUid || Math.random().toString(36).substr(2, 9),
     phone,
     created_at: new Date().toISOString(),
     wallet_balance: config.initialWalletBalance,
@@ -25,6 +29,7 @@ router.post("/register", (req, res) => {
     transactions: [],
   };
 
+  console.log("Creating new user:", newUser.id);
   saveUser(newUser);
   res.status(201).json({ message: "User registered successfully", user: newUser });
 });
