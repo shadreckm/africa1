@@ -1568,24 +1568,35 @@ export default function App() {
 
   useEffect(() => {
     const savedUser = localStorage.getItem('kulima_user');
-    if (savedUser) {
-      const parsed = JSON.parse(savedUser);
-      setUser(parsed);
-      authService.getProfile(parsed.id).then(res => {
-        setUser(res.user);
-        localStorage.setItem('kulima_user', JSON.stringify(res.user));
-      }).catch(() => {
+    if (savedUser && savedUser !== "undefined") {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.id) {
+          setUser(parsed);
+          authService.getProfile(parsed.id).then(res => {
+            if (res && res.user) {
+              setUser(res.user);
+              localStorage.setItem('kulima_user', JSON.stringify(res.user));
+            }
+          }).catch(() => {
+            localStorage.removeItem('kulima_user');
+            setUser(null);
+          });
+        }
+      } catch (error) {
+        console.error("Failed to parse saved user", error);
         localStorage.removeItem('kulima_user');
-        setUser(null);
-      });
+      }
     }
     setIsAuthReady(true);
   }, []);
 
   const handleLogin = (userData: UserData) => {
-    setUser(userData);
-    localStorage.setItem('kulima_user', JSON.stringify(userData));
-    setCurrentScreen('dashboard');
+    if (userData) {
+      setUser(userData);
+      localStorage.setItem('kulima_user', JSON.stringify(userData));
+      setCurrentScreen('dashboard');
+    }
   };
 
   if (!isAuthReady) {
