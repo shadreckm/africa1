@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { 
   ShieldCheck, 
   Wallet, 
@@ -45,17 +46,33 @@ import {
   Rocket,
   Target,
   Map,
-  BarChart3
+  BarChart3,
+  Send,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { Logo, LogoIcon } from './components/Logo';
+import { authService } from './services/authService';
+import { walletService } from './services/walletService';
+import { trustService } from './services/trustService';
+import { lumozaAIService } from './services/lumozaService';
 
 // --- Types ---
-type ScreenId = 'onboarding' | 'dashboard' | 'wallet' | 'profile' | 'opportunities' | 'lumoza' | 'lundai' | 'notifications' | 'architecture' | 'intelligence' | 'strategy' | 'brand' | 'behavioral' | 'kulimaverse' | 'deployment';
+type ScreenId = 'login' | 'onboarding' | 'dashboard' | 'wallet' | 'profile' | 'opportunities' | 'lumoza' | 'lundai' | 'notifications' | 'architecture' | 'intelligence' | 'strategy' | 'brand' | 'behavioral' | 'kulimaverse' | 'deployment';
+
+interface UserData {
+  id: string;
+  phone: string;
+  wallet_balance: number;
+  trust_score: number;
+  transactions: any[];
+}
 
 interface ScreenProps {
   onNavigate: (id: ScreenId) => void;
+  user: UserData | null;
+  onRefreshUser: () => void;
 }
 
 // --- Shared Components ---
@@ -144,12 +161,12 @@ const Onboarding = ({ onNavigate }: ScreenProps) => (
   </div>
 );
 
-const Dashboard = ({ onNavigate }: ScreenProps) => (
+const Dashboard = ({ onNavigate, user }: ScreenProps) => (
   <div className="h-full overflow-y-auto p-6 space-y-8 pb-24">
     <div className="flex justify-between items-center">
       <div>
         <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold">Welcome back,</p>
-        <h2 className="text-2xl font-medium text-white">Shadreck Mawindo</h2>
+        <h2 className="text-2xl font-medium text-white">{user?.phone || 'Farmer'}</h2>
       </div>
       <div className="flex gap-3">
         <button onClick={() => onNavigate('notifications')} className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center relative">
@@ -157,7 +174,7 @@ const Dashboard = ({ onNavigate }: ScreenProps) => (
           <span className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full border-2 border-[#050505]" />
         </button>
         <button onClick={() => onNavigate('profile')} className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden">
-          <img src="https://picsum.photos/seed/shadreck/100/100" alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          <img src={`https://picsum.photos/seed/${user?.id || 'farmer'}/100/100`} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
         </button>
       </div>
     </div>
@@ -171,33 +188,35 @@ const Dashboard = ({ onNavigate }: ScreenProps) => (
         <div className="flex justify-between items-start mb-6">
           <div>
             <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold mb-1">Impact Trust Score</p>
-            <h3 className="text-4xl font-medium text-white">842</h3>
+            <h3 className="text-4xl font-medium text-white">{user?.trust_score || 0}</h3>
           </div>
           <div className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
-            +12 pts
+            +5 pts
           </div>
         </div>
         <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
           <motion.div 
             initial={{ width: 0 }}
-            animate={{ width: '84.2%' }}
+            animate={{ width: `${(user?.trust_score || 0) / 10}%` }}
             className="h-full bg-gradient-to-r from-blue-500 to-emerald-500"
           />
         </div>
-        <p className="text-[10px] text-zinc-500 mt-3">Top 5% of farmers in your region. Eligible for $500 credit.</p>
+        <p className="text-[10px] text-zinc-500 mt-3">
+          {user?.trust_score && user.trust_score > 800 ? 'Top 5% of farmers in your region. Eligible for $500 credit.' : 'Increase your score by interacting with LUMOZA AI.'}
+        </p>
       </GlassCard>
 
       <GlassCard className="bg-amber-500/10 border-amber-500/20 p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
-            <Award className="w-5 h-5 text-amber-400" />
+            <Wallet className="w-5 h-5 text-amber-400" />
           </div>
           <div>
-            <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">VU Points</p>
-            <p className="text-lg font-bold text-white">1,250</p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Wallet Balance</p>
+            <p className="text-lg font-bold text-white">${user?.wallet_balance?.toLocaleString() || '0.00'}</p>
           </div>
         </div>
-        <button onClick={() => onNavigate('wallet')} className="px-4 py-2 bg-amber-500 text-black text-[10px] font-bold rounded-full uppercase">Redeem</button>
+        <button onClick={() => onNavigate('wallet')} className="px-4 py-2 bg-amber-500 text-black text-[10px] font-bold rounded-full uppercase">Manage</button>
       </GlassCard>
     </div>
 
@@ -250,178 +269,220 @@ const Dashboard = ({ onNavigate }: ScreenProps) => (
   </div>
 );
 
-const WalletScreen = () => (
-  <div className="h-full overflow-y-auto p-6 space-y-8 pb-24">
-    <div className="text-center space-y-2">
-      <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold">Total Balance</p>
-      <h2 className="text-5xl font-medium text-white">$1,240.50</h2>
-      <div className="flex justify-center gap-2">
-        <Badge color="blue">KULIMA WALLET</Badge>
-      </div>
-    </div>
+const WalletScreen = ({ user, onRefreshUser }: ScreenProps) => {
+  const [amount, setAmount] = useState('');
+  const [loading, setLoading] = useState(false);
 
-    <div className="flex gap-4">
-      <button className="flex-1 py-4 bg-white text-black rounded-2xl font-bold text-sm flex items-center justify-center gap-2">
-        <ArrowUpRight className="w-4 h-4" /> Send
-      </button>
-      <button className="flex-1 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2">
-        <Plus className="w-4 h-4" /> Add
-      </button>
-    </div>
+  const handleAddFunds = async () => {
+    if (!user || !amount) return;
+    setLoading(true);
+    await walletService.credit(user.id, parseFloat(amount), "Manual Top-up");
+    setAmount('');
+    onRefreshUser();
+    setLoading(false);
+  };
 
-    <div>
-      <SectionHeader title="Active Vouchers" />
-      <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-        {[
-          { title: "Seed Voucher", amount: "$25", expiry: "2d left", color: "from-emerald-500 to-teal-600" },
-          { title: "Solar Grant", amount: "$150", expiry: "14d left", color: "from-blue-500 to-indigo-600" }
-        ].map((v, i) => (
-          <div key={i} className={`min-w-[200px] p-5 rounded-3xl bg-gradient-to-br ${v.color} relative overflow-hidden group`}>
-            <div className="absolute top-[-20%] right-[-20%] w-24 h-24 bg-white/20 rounded-full blur-2xl group-hover:scale-150 transition-transform" />
-            <p className="text-[10px] text-white/60 uppercase font-bold mb-1">{v.title}</p>
-            <h4 className="text-2xl font-bold text-white mb-4">{v.amount}</h4>
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] px-2 py-1 bg-black/20 rounded-full text-white">{v.expiry}</span>
-              <ArrowRight className="w-4 h-4 text-white" />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-
-    <div>
-      <SectionHeader title="Recent Activity" />
-      <div className="space-y-2">
-        {[
-          { title: "Market Sale", desc: "Maize - 500kg", amount: "+$450.00", date: "Today", icon: ArrowDownLeft, color: "text-emerald-400" },
-          { title: "Seed Purchase", desc: "Hybrid Maize", amount: "-$120.00", date: "Yesterday", icon: ArrowUpRight, color: "text-red-400" }
-        ].map((t, i) => (
-          <div key={i} className="flex items-center gap-4 p-4 hover:bg-white/5 rounded-2xl transition-colors">
-            <div className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center ${t.color}`}>
-              <t.icon className="w-5 h-5" />
-            </div>
-            <div className="flex-1">
-              <h5 className="text-sm font-medium text-white">{t.title}</h5>
-              <p className="text-xs text-zinc-500">{t.desc}</p>
-            </div>
-            <div className="text-right">
-              <p className={`text-sm font-bold ${t.amount.startsWith('+') ? 'text-emerald-400' : 'text-white'}`}>{t.amount}</p>
-              <p className="text-[10px] text-zinc-600">{t.date}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
-const LumozaScreen = () => (
-  <div className="h-full overflow-y-auto p-6 space-y-8 pb-24">
-    <div className="flex items-center gap-4">
-      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
-        <Sprout className="w-6 h-6 text-emerald-400" />
-      </div>
-      <div>
-        <h2 className="text-2xl font-medium text-white">LUMOZA AI</h2>
-        <p className="text-xs text-zinc-500">Your Agricultural Intelligence</p>
-      </div>
-    </div>
-
-    <div className="grid grid-cols-2 gap-3">
-      <div className="p-4 bg-pink-500/10 rounded-2xl border border-pink-500/20">
-        <p className="text-[10px] text-pink-400 font-bold uppercase tracking-widest mb-1">Impact Score</p>
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-pink-400" />
-          <span className="text-xl font-bold text-white">842</span>
-        </div>
-        <p className="text-[8px] text-zinc-500 mt-1">Level 3: Cultivator</p>
-      </div>
-      <div className="p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20">
-        <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest mb-1">VU Points</p>
-        <div className="flex items-center gap-2">
-          <Award className="w-4 h-4 text-amber-400" />
-          <span className="text-xl font-bold text-white">1,250</span>
-        </div>
-        <p className="text-[8px] text-zinc-500 mt-1">≈ K6,250 Airtime</p>
-      </div>
-    </div>
-
-    <GlassCard className="bg-emerald-500/5 border-emerald-500/20">
-      <div className="flex items-start gap-4">
-        <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
-          <Sparkles className="w-5 h-5 text-white" />
-        </div>
-        <div className="space-y-3">
-          <p className="text-sm text-white leading-relaxed">
-            "I've analyzed your soil sensors in <span className="text-emerald-400 font-bold">Block B</span>. Nitrogen levels are dropping. I recommend applying Urea before the rain expected tomorrow at 4 PM."
-          </p>
-          <div className="flex gap-2">
-            <button className="px-4 py-2 bg-emerald-500 text-black text-[10px] font-bold rounded-full uppercase">Apply Recommendation</button>
-            <button className="px-4 py-2 bg-white/5 text-white text-[10px] font-bold rounded-full uppercase border border-white/10">Ask AI</button>
-          </div>
+  return (
+    <div className="h-full overflow-y-auto p-6 space-y-8 pb-24">
+      <div className="text-center space-y-2">
+        <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold">Total Balance</p>
+        <h2 className="text-5xl font-medium text-white">${user?.wallet_balance?.toLocaleString() || '0.00'}</h2>
+        <div className="flex justify-center gap-2">
+          <Badge color="blue">KULIMA WALLET</Badge>
         </div>
       </div>
-    </GlassCard>
 
-    <div className="grid grid-cols-2 gap-4">
-      <GlassCard className="p-4 space-y-2">
-        <p className="text-[10px] text-zinc-500 uppercase font-bold">Soil Moisture</p>
-        <div className="flex items-end gap-2">
-          <span className="text-2xl font-bold text-white">42%</span>
-          <span className="text-[10px] text-emerald-400 mb-1">Optimal</span>
-        </div>
-      </GlassCard>
-      <GlassCard className="p-4 space-y-2">
-        <p className="text-[10px] text-zinc-500 uppercase font-bold">Est. Yield</p>
-        <div className="flex items-end gap-2">
-          <span className="text-2xl font-bold text-white">4.2t</span>
-          <span className="text-[10px] text-blue-400 mb-1">+15%</span>
-        </div>
-      </GlassCard>
-    </div>
-
-    <div>
-      <SectionHeader title="Field Insights" />
       <div className="space-y-4">
-        {[
-          { title: "Weather Alert", desc: "Heavy rain expected in 24h", icon: Globe, color: "text-blue-400" },
-          { title: "Market Trend", desc: "Maize prices rising in Nairobi", icon: TrendingUp, color: "text-emerald-400" }
-        ].map((insight, i) => (
-          <GlassCard key={i} className="p-4 flex items-center gap-4">
-            <div className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center ${insight.color}`}>
-              <insight.icon className="w-5 h-5" />
-            </div>
-            <div>
-              <h5 className="text-sm font-medium text-white">{insight.title}</h5>
-              <p className="text-xs text-zinc-500">{insight.desc}</p>
-            </div>
-          </GlassCard>
-        ))}
+        <div className="flex gap-2">
+          <input 
+            type="number" 
+            placeholder="Amount" 
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="flex-1 bg-white/5 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-blue-500 transition-colors"
+          />
+          <button 
+            onClick={handleAddFunds}
+            disabled={loading}
+            className="px-6 bg-white text-black rounded-2xl font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <SectionHeader title="Recent Activity" />
+        <div className="space-y-2">
+          {user?.transactions && user.transactions.length > 0 ? (
+            user.transactions.slice().reverse().map((t, i) => (
+              <div key={i} className="flex items-center gap-4 p-4 hover:bg-white/5 rounded-2xl transition-colors">
+                <div className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center ${t.type === 'credit' ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {t.type === 'credit' ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                </div>
+                <div className="flex-1">
+                  <h5 className="text-sm font-medium text-white">{t.description}</h5>
+                  <p className="text-xs text-zinc-500">{t.type === 'credit' ? 'Received' : 'Sent'}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-bold ${t.type === 'credit' ? 'text-emerald-400' : 'text-white'}`}>
+                    {t.type === 'credit' ? '+' : '-'}${t.amount.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-zinc-600">{new Date(t.timestamp).toLocaleDateString()}</p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-zinc-500 py-8">No transactions yet.</p>
+          )}
+        </div>
       </div>
     </div>
+  );
+};
 
-    <GlassCard className="bg-emerald-500/5 border-emerald-500/20 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h5 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Reliability Status</h5>
-        <Badge color="emerald">Operational</Badge>
+const LumozaScreen = ({ user, onRefreshUser }: ScreenProps) => {
+  const [messages, setMessages] = useState<{role: 'user' | 'ai', content: string}[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || !user) return;
+    
+    const userMessage = input;
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setLoading(true);
+
+    try {
+      // 1. Get AI Advice
+      const aiResponse = await lumozaAIService.getAIAdvice(userMessage);
+      
+      // 2. Log interaction on backend (updates trust score)
+      await lumozaAIService.logInteraction(user.id, userMessage);
+      
+      setMessages(prev => [...prev, { role: 'ai', content: aiResponse }]);
+      onRefreshUser(); // Refresh trust score
+    } catch (error) {
+      setMessages(prev => [...prev, { role: 'ai', content: "Sorry, I encountered an error. Please try again." }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col p-6 space-y-6 pb-24">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+          <Sprout className="w-6 h-6 text-emerald-400" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-medium text-white">LUMOZA AI</h2>
+          <p className="text-xs text-zinc-500">Your Agricultural Intelligence</p>
+        </div>
       </div>
-      <div className="grid grid-cols-3 gap-2">
-        <div className="text-center p-2 bg-black/40 rounded-xl border border-white/5">
-          <p className="text-[8px] text-zinc-500 uppercase font-bold">Latency</p>
-          <p className="text-xs text-white font-bold">1.2s</p>
-        </div>
-        <div className="text-center p-2 bg-black/40 rounded-xl border border-white/5">
-          <p className="text-[8px] text-zinc-500 uppercase font-bold">Accuracy</p>
-          <p className="text-xs text-white font-bold">94%</p>
-        </div>
-        <div className="text-center p-2 bg-black/40 rounded-xl border border-white/5">
-          <p className="text-[8px] text-zinc-500 uppercase font-bold">Uptime</p>
-          <p className="text-xs text-white font-bold">99.9%</p>
-        </div>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-2 no-scrollbar">
+        {messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50">
+            <Brain className="w-12 h-12 text-emerald-400" />
+            <p className="text-sm text-zinc-400 max-w-[200px]">Ask me anything about your farm, crops, or soil.</p>
+          </div>
+        )}
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[85%] p-4 rounded-2xl ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white/5 border border-white/10 text-zinc-300'}`}>
+              <div className="text-sm leading-relaxed prose prose-invert prose-sm">
+                <ReactMarkdown>
+                  {msg.content}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+              <span className="text-xs text-zinc-500 tracking-widest uppercase font-bold">LUMOZA is thinking...</span>
+            </div>
+          </div>
+        )}
       </div>
-    </GlassCard>
-  </div>
-);
+
+      <div className="relative">
+        <input 
+          type="text" 
+          placeholder="Ask LUMOZA..." 
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 pr-14 text-white outline-none focus:border-emerald-500 transition-colors"
+        />
+        <button 
+          onClick={handleSend}
+          disabled={loading || !input.trim()}
+          className="absolute right-2 top-2 p-2 bg-emerald-500 text-black rounded-xl disabled:opacity-50 transition-opacity"
+        >
+          <Send className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const LoginScreen = ({ onLogin }: { onLogin: (user: UserData) => void }) => {
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!phone) return;
+    setLoading(true);
+    try {
+      const res = await authService.register(phone);
+      onLogin(res.user);
+    } catch (error) {
+      console.error("Login failed", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col p-8 bg-[#050505] items-center justify-center space-y-8">
+      <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-2xl shadow-white/10">
+        <LogoIcon className="scale-150" />
+      </div>
+      <div className="text-center space-y-2">
+        <h1 className="text-3xl font-medium text-white tracking-tighter">Welcome to Kulima</h1>
+        <p className="text-zinc-500 text-sm">Enter your phone number to continue</p>
+      </div>
+      <div className="w-full space-y-4">
+        <input 
+          type="tel" 
+          placeholder="+265 000 000 000" 
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-white text-lg text-center outline-none focus:border-blue-500 transition-colors"
+        />
+        <button 
+          onClick={handleLogin}
+          disabled={loading || !phone}
+          className="w-full py-5 bg-white text-black rounded-3xl font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Continue'}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const ArchitectureScreen = () => (
   <div className="h-full overflow-y-auto p-6 space-y-8 pb-24">
@@ -1416,26 +1477,72 @@ const KulimaVerseScreen = () => (
 );
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<ScreenId>('onboarding');
+  const [currentScreen, setCurrentScreen] = useState<ScreenId>('dashboard');
+  const [user, setUser] = useState<UserData | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  const refreshUserData = async () => {
+    if (!user) return;
+    try {
+      const data = await authService.getProfile(user.id);
+      setUser(data.user);
+    } catch (error) {
+      console.error("Failed to refresh user data", error);
+    }
+  };
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('kulima_user');
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      setUser(parsed);
+      authService.getProfile(parsed.id).then(res => {
+        setUser(res.user);
+        localStorage.setItem('kulima_user', JSON.stringify(res.user));
+      }).catch(() => {
+        localStorage.removeItem('kulima_user');
+        setUser(null);
+      });
+    }
+    setIsAuthReady(true);
+  }, []);
+
+  const handleLogin = (userData: UserData) => {
+    setUser(userData);
+    localStorage.setItem('kulima_user', JSON.stringify(userData));
+    setCurrentScreen('dashboard');
+  };
+
+  if (!isAuthReady) {
+    return (
+      <div className="h-screen bg-[#050505] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-white" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
 
   const renderScreen = () => {
+    const props = { user, onRefreshUser: refreshUserData };
     switch (currentScreen) {
-      case 'onboarding': return <Onboarding onNavigate={setCurrentScreen} />;
-      case 'dashboard': return <Dashboard onNavigate={setCurrentScreen} />;
-      case 'wallet': return <WalletScreen />;
-      case 'lumoza': return <LumozaScreen />;
+      case 'dashboard': return <Dashboard {...props} onNavigate={setCurrentScreen} />;
+      case 'wallet': return <WalletScreen {...props} onNavigate={setCurrentScreen} />;
+      case 'lumoza': return <LumozaScreen {...props} onNavigate={setCurrentScreen} />;
       case 'lundai': return <LundaiScreen />;
       case 'profile': return <ProfileScreen />;
       case 'opportunities': return <OpportunitiesScreen />;
       case 'notifications': return <NotificationsScreen />;
       case 'architecture': return <ArchitectureScreen />;
       case 'intelligence': return <IntelligenceScreen />;
-      case 'strategy': return <StrategyScreen onNavigate={setCurrentScreen} />;
+      case 'strategy': return <StrategyScreen {...props} onNavigate={setCurrentScreen} />;
       case 'brand': return <BrandScreen />;
       case 'behavioral': return <BehavioralScreen />;
       case 'kulimaverse': return <KulimaVerseScreen />;
       case 'deployment': return <DeploymentReadinessScreen />;
-      default: return <Dashboard onNavigate={setCurrentScreen} />;
+      default: return <Dashboard {...props} onNavigate={setCurrentScreen} />;
     }
   };
 
